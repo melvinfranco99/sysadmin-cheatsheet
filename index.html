@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sysadmin Cheatsheet — Referencia técnica ASIR</title>
+  <meta name="description" content="Web de referencia rápida para técnico informático: comandos Windows/Linux, redes, wifi, discos, ciberseguridad, compartir datos, servidores, Active Directory, router/switch y herramientas del pendrive Ventoy." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖥️</text></svg>" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-title">🖥️ Sysadmin Cheatsheet</span>
+      <span class="brand-sub">Referencia técnica ASIR</span>
+    </div>
+    <div class="search-wrap">
+      <span class="search-icon">🔎</span>
+      <input id="search-input" type="text" placeholder="Buscar comando, herramienta, tarea... (ej. ping, VLAN, Clonezilla, GPO)" autocomplete="off" />
+      <button id="clear-search" title="Borrar búsqueda">✕</button>
+    </div>
+    <span class="hint">Pulsa <kbd>/</kbd> para buscar</span>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="category-nav"></aside>
+    <main class="main">
+      <div class="results-header">
+        <span id="result-count"></span>
+      </div>
+      <div id="results"></div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    Chuleta personal de administración de sistemas — Windows · Linux · Redes · Ciberseguridad · Active Directory · Herramientas Ventoy
+  </footer>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
