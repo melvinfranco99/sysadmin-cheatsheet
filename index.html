@@ -20,6 +20,10 @@
       <button id="clear-search" title="Borrar búsqueda">✕</button>
     </div>
     <span class="hint">Pulsa <kbd>/</kbd> para buscar</span>
+    <div class="topbar-actions">
+      <button id="save-github-btn" class="btn-save-github" hidden>💾 Guardar cambios <span id="dirty-count" class="dirty-badge"></span></button>
+      <button id="github-settings-btn" class="btn-github">🔌 GitHub</button>
+    </div>
   </header>
 
   <div class="layout">
@@ -27,6 +31,7 @@
     <main class="main">
       <div class="results-header">
         <span id="result-count"></span>
+        <button id="add-entry-btn" class="btn-add">+ Añadir entrada</button>
       </div>
       <div id="results"></div>
     </main>
@@ -35,6 +40,72 @@
   <footer class="site-footer">
     Chuleta personal de administración de sistemas — Windows · Linux · Redes · Ciberseguridad · Active Directory · Herramientas Ventoy
   </footer>
+
+  <dialog id="entry-modal" class="modal">
+    <form method="dialog" id="entry-form" class="modal-form">
+      <h2 id="entry-modal-title">Nueva entrada</h2>
+      <input type="hidden" id="entry-id" />
+      <input type="hidden" id="entry-original-category" />
+
+      <label>Categoría
+        <select id="entry-category" required></select>
+      </label>
+      <label>Subcategoría
+        <input type="text" id="entry-subcategory" placeholder="ej. Redes" />
+      </label>
+      <label>Título
+        <input type="text" id="entry-title" required placeholder="ej. Ver configuración IP" />
+      </label>
+      <label>Descripción
+        <textarea id="entry-description" required rows="2" placeholder="Descripción breve de la entrada"></textarea>
+      </label>
+      <label>Etiquetas (separadas por comas)
+        <input type="text" id="entry-tags" placeholder="ip, red, dns" />
+      </label>
+      <label>Pasos en modo gráfico (opcional, uno por línea)
+        <textarea id="entry-gui" rows="3" placeholder="Panel de control &gt; Redes...&#10;Clic en Propiedades..."></textarea>
+      </label>
+      <label>Comandos de consola (opcional)
+        <textarea id="entry-cli" rows="7" placeholder="## Windows (CMD)&#10;$ ipconfig /all&#10;&gt; Muestra la IP, máscara y DNS.&#10;&#10;## Linux&#10;$ ip a&#10;&gt; Muestra las interfaces de red."></textarea>
+        <small>Una línea <code>## Sistema</code> por bloque; luego <code>$ comando</code> y opcionalmente <code>&gt; explicación</code> debajo.</small>
+      </label>
+      <label>Notas (opcional)
+        <textarea id="entry-notes" rows="2"></textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" id="entry-cancel">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="github-modal" class="modal">
+    <form method="dialog" id="github-form" class="modal-form">
+      <h2>Conectar con GitHub</h2>
+      <p class="modal-hint">Los cambios se guardan primero en este navegador. Para que aparezcan también en GitHub y en la web publicada, conecta un token de acceso personal.</p>
+      <label>Usuario/organización
+        <input type="text" id="gh-owner" required />
+      </label>
+      <label>Repositorio
+        <input type="text" id="gh-repo" required />
+      </label>
+      <label>Rama
+        <input type="text" id="gh-branch" required />
+      </label>
+      <label>Token de acceso personal
+        <input type="password" id="gh-token" required placeholder="github_pat_..." autocomplete="off" />
+      </label>
+      <p class="modal-hint">
+        Crea uno en <code>github.com/settings/tokens?type=beta</code>, limitado solo a este repositorio, con permiso "Contents: Read and write". Se guarda únicamente en este navegador (localStorage) — usa "Olvidar token" si compartes el equipo.
+      </p>
+      <div class="modal-actions">
+        <button type="button" id="gh-forget">Olvidar token</button>
+        <button type="button" id="gh-cancel">Cancelar</button>
+        <button type="submit" class="primary">Guardar conexión</button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="assets/js/app.js"></script>
 </body>
