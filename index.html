@@ -30,7 +30,10 @@
     <aside class="sidebar" id="category-nav"></aside>
     <main class="main">
       <div class="results-header">
-        <span id="result-count"></span>
+        <div class="results-header-left">
+          <span id="result-count"></span>
+          <span id="reorder-hint" class="reorder-hint"></span>
+        </div>
         <button id="add-entry-btn" class="btn-add">+ Añadir entrada</button>
       </div>
       <div id="results"></div>
@@ -75,6 +78,23 @@
 
       <div class="modal-actions">
         <button type="button" id="entry-cancel">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="category-modal" class="modal">
+    <form method="dialog" id="category-form" class="modal-form">
+      <h2 id="category-modal-title">Nueva categoría</h2>
+      <input type="hidden" id="category-id" />
+      <label>Nombre
+        <input type="text" id="category-label" required placeholder="ej. Virtualización" />
+      </label>
+      <label>Icono (un emoji, opcional)
+        <input type="text" id="category-icon" placeholder="🧩" maxlength="4" />
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="category-cancel">Cancelar</button>
         <button type="submit" class="primary">Guardar</button>
       </div>
     </form>

@@ -1,3 +1,5 @@
+import { categoriesData } from "./data/categories.js";
+import { customData } from "./data/custom.js";
 import { windowsData } from "./data/windows.js";
 import { linuxData } from "./data/linux.js";
 import { redesData } from "./data/redes.js";
@@ -8,19 +10,6 @@ import { servidoresData } from "./data/servidores.js";
 import { adData } from "./data/active-directory.js";
 import { routerSwitchData } from "./data/router-switch.js";
 import { herramientasData } from "./data/herramientas.js";
-
-const CATEGORIES = [
-  { id: "windows", label: "Windows", icon: "🪟" },
-  { id: "linux", label: "Linux", icon: "🐧" },
-  { id: "redes", label: "Redes y Wifi", icon: "📶" },
-  { id: "ciberseguridad", label: "Ciberseguridad", icon: "🛡️" },
-  { id: "compartir", label: "Compartir datos", icon: "🔗" },
-  { id: "discos", label: "Discos y archivos", icon: "💾" },
-  { id: "servidores", label: "Servidores", icon: "🖥️" },
-  { id: "ad", label: "Active Directory", icon: "🏢" },
-  { id: "router", label: "Router y Switch", icon: "🌐" },
-  { id: "herramientas", label: "Herramientas (Pendrive)", icon: "🧰" }
-];
 
 const BUNDLED_BY_CATEGORY = {
   windows: windowsData,
@@ -48,8 +37,16 @@ const CATEGORY_FILE_MAP = {
   herramientas: { path: "assets/js/data/herramientas.js", varName: "herramientasData" }
 };
 
+const BUILTIN_IDS = new Set(Object.keys(CATEGORY_FILE_MAP));
+
+const CATEGORIES_FILE = { path: "assets/js/data/categories.js", varName: "categoriesData" };
+const CUSTOM_FILE = { path: "assets/js/data/custom.js", varName: "customData" };
+const CATEGORIES_DIRTY_KEY = "__categories__";
+const CUSTOM_DIRTY_KEY = "__custom__";
+
 const LS_PREFIX = "sysch:";
 const LS_GITHUB_CONFIG = LS_PREFIX + "github";
+const LS_CATEGORIES = LS_PREFIX + "categories";
 
 const state = {
   query: "",
@@ -57,7 +54,9 @@ const state = {
 };
 
 const dirtySet = new Set(
-  CATEGORIES.map((c) => c.id).filter((id) => localStorage.getItem(LS_PREFIX + "dirty:" + id) === "1")
+  [...BUILTIN_IDS, CATEGORIES_DIRTY_KEY, CUSTOM_DIRTY_KEY].filter(
+    (key) => localStorage.getItem(LS_PREFIX + "dirty:" + key) === "1"
+  )
 );
 
 const haystackCache = new WeakMap();
@@ -94,14 +93,82 @@ function utf8ToBase64(str) {
   return btoa(unescape(encodeURIComponent(str)));
 }
 
-/* ---------- persistencia local (localStorage) por categoría ---------- */
+/* ---------- categorías (barra lateral) ---------- */
+
+function getCategories() {
+  const raw = localStorage.getItem(LS_CATEGORIES);
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      /* falls through to default */
+    }
+  }
+  return categoriesData.slice();
+}
+
+function setCategories(arr) {
+  localStorage.setItem(LS_CATEGORIES, JSON.stringify(arr));
+  markDirty(CATEGORIES_DIRTY_KEY);
+}
+
+function categoryLabel(id) {
+  const c = getCategories().find((c) => c.id === id);
+  return c ? c.label : id;
+}
+
+function categoryIcon(id) {
+  const c = getCategories().find((c) => c.id === id);
+  return c ? c.icon || "📁" : "📁";
+}
+
+function generateCategoryId(label) {
+  const existingIds = new Set(getCategories().map((c) => c.id));
+  const base = slugify(label);
+  let candidate = base;
+  let n = 2;
+  while (existingIds.has(candidate)) {
+    candidate = `${base}-${n}`;
+    n++;
+  }
+  return candidate;
+}
+
+function addCategory({ label, icon }) {
+  const cats = getCategories();
+  cats.push({ id: generateCategoryId(label), label, icon: icon || "📁" });
+  setCategories(cats);
+}
+
+function updateCategory(id, { label, icon }) {
+  const cats = getCategories().map((c) =>
+    c.id === id ? { ...c, label, icon: icon || "📁" } : c
+  );
+  setCategories(cats);
+}
+
+function reorderCategories(newOrderIds) {
+  const cats = getCategories();
+  const byId = new Map(cats.map((c) => [c.id, c]));
+  const reordered = newOrderIds.map((id) => byId.get(id)).filter(Boolean);
+  setCategories(reordered);
+}
+
+function deleteCategory(id) {
+  setCategoryEntries(id, []); // borra en cascada las entradas de esa categoría
+  const cats = getCategories().filter((c) => c.id !== id);
+  setCategories(cats);
+  if (state.activeCategory === id) state.activeCategory = "all";
+}
+
+/* ---------- persistencia local (localStorage) de entradas ---------- */
 
 function overrideKey(catId) {
   return LS_PREFIX + "data:" + catId;
 }
 
-function loadOverride(catId) {
-  const raw = localStorage.getItem(overrideKey(catId));
+function loadOverride(key) {
+  const raw = localStorage.getItem(overrideKey(key));
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -110,29 +177,46 @@ function loadOverride(catId) {
   }
 }
 
+function getCustomBucket() {
+  return loadOverride("custom") || customData.slice();
+}
+
+function setCustomBucket(arr) {
+  localStorage.setItem(overrideKey("custom"), JSON.stringify(arr));
+  markDirty(CUSTOM_DIRTY_KEY);
+}
+
 function getCategoryEntries(catId) {
-  const override = loadOverride(catId);
-  if (override) return override;
-  return (BUNDLED_BY_CATEGORY[catId] || []).slice();
+  if (BUILTIN_IDS.has(catId)) {
+    const override = loadOverride(catId);
+    if (override) return override;
+    return (BUNDLED_BY_CATEGORY[catId] || []).slice();
+  }
+  return getCustomBucket().filter((e) => e.category === catId);
 }
 
 function setCategoryEntries(catId, arr) {
-  localStorage.setItem(overrideKey(catId), JSON.stringify(arr));
-  markDirty(catId);
+  if (BUILTIN_IDS.has(catId)) {
+    localStorage.setItem(overrideKey(catId), JSON.stringify(arr));
+    markDirty(catId);
+  } else {
+    const rest = getCustomBucket().filter((e) => e.category !== catId);
+    setCustomBucket([...rest, ...arr]);
+  }
 }
 
 function getAllEntries() {
-  return CATEGORIES.flatMap((c) => getCategoryEntries(c.id));
+  return getCategories().flatMap((c) => getCategoryEntries(c.id));
 }
 
-function markDirty(catId) {
-  dirtySet.add(catId);
-  localStorage.setItem(LS_PREFIX + "dirty:" + catId, "1");
+function markDirty(key) {
+  dirtySet.add(key);
+  localStorage.setItem(LS_PREFIX + "dirty:" + key, "1");
 }
 
-function clearDirty(catId) {
-  dirtySet.delete(catId);
-  localStorage.removeItem(LS_PREFIX + "dirty:" + catId);
+function clearDirty(key) {
+  dirtySet.delete(key);
+  localStorage.removeItem(LS_PREFIX + "dirty:" + key);
 }
 
 /* ---------- CRUD de entradas ---------- */
@@ -182,6 +266,13 @@ function updateEntry(originalCategory, entry) {
 function deleteEntry(catId, id) {
   const arr = getCategoryEntries(catId).filter((e) => e.id !== id);
   setCategoryEntries(catId, arr);
+}
+
+function reorderCategoryEntries(catId, newOrderIds) {
+  const arr = getCategoryEntries(catId);
+  const byId = new Map(arr.map((e) => [e.id, e]));
+  const reordered = newOrderIds.map((id) => byId.get(id)).filter(Boolean);
+  setCategoryEntries(catId, reordered);
 }
 
 /* ---------- parseo del formulario (GUI / CLI en texto plano) ---------- */
@@ -314,11 +405,6 @@ function highlight(text, q) {
   }
 }
 
-function categoryLabel(id) {
-  const c = CATEGORIES.find((c) => c.id === id);
-  return c ? c.label : id;
-}
-
 /* ---------- toasts ---------- */
 
 function toast(message, kind = "info") {
@@ -333,34 +419,110 @@ function toast(message, kind = "info") {
   }, 4200);
 }
 
-/* ---------- render ---------- */
+/* ---------- drag & drop genérico (reordenar filas) ---------- */
+
+function enableRowDragReorder(container, rowSelector, idAttr, onDrop) {
+  let dragging = null;
+  container.querySelectorAll(rowSelector).forEach((row) => {
+    row.addEventListener("dragstart", () => {
+      dragging = row;
+      row.classList.add("dragging");
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      dragging = null;
+    });
+    row.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+      if (!dragging || dragging === row) return;
+      const rect = row.getBoundingClientRect();
+      const before = ev.clientY - rect.top < rect.height / 2;
+      row.parentNode.insertBefore(dragging, before ? row : row.nextSibling);
+    });
+    row.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      const newOrder = [...container.querySelectorAll(rowSelector)].map((r) => r.dataset[idAttr]);
+      onDrop(newOrder);
+    });
+  });
+}
+
+/* ---------- render: barra lateral de categorías ---------- */
 
 function renderSidebar() {
   const nav = document.getElementById("category-nav");
+  const cats = getCategories();
   const totalCount = countByCategory("all");
-  const items = [
-    `<button class="cat-btn ${state.activeCategory === "all" ? "active" : ""}" data-cat="all">
-      <span class="cat-icon">🔎</span><span class="cat-label">Todo</span><span class="cat-count">${totalCount}</span>
-    </button>`
-  ];
-  for (const cat of CATEGORIES) {
-    const count = countByCategory(cat.id);
-    items.push(`
-      <button class="cat-btn ${state.activeCategory === cat.id ? "active" : ""}" data-cat="${cat.id}">
-        <span class="cat-icon">${cat.icon}</span><span class="cat-label">${cat.label}</span><span class="cat-count">${count}</span>
+
+  const rows = [
+    `<div class="cat-row cat-row-all">
+      <button class="cat-btn ${state.activeCategory === "all" ? "active" : ""}" data-cat="all">
+        <span class="cat-icon">🔎</span><span class="cat-label">Todo</span><span class="cat-count">${totalCount}</span>
       </button>
+    </div>`
+  ];
+
+  for (const cat of cats) {
+    const count = countByCategory(cat.id);
+    rows.push(`
+      <div class="cat-row" draggable="true" data-cat-row-id="${cat.id}">
+        <span class="drag-handle" title="Arrastrar para reordenar">⠿</span>
+        <button class="cat-btn ${state.activeCategory === cat.id ? "active" : ""}" data-cat="${cat.id}">
+          <span class="cat-icon">${escapeHtml(cat.icon || "📁")}</span><span class="cat-label">${escapeHtml(cat.label)}</span><span class="cat-count">${count}</span>
+        </button>
+        <div class="cat-admin-actions">
+          <button class="icon-btn cat-edit-btn" data-cat-id="${cat.id}" title="Modificar categoría">✏️</button>
+          <button class="icon-btn cat-delete-btn" data-cat-id="${cat.id}" title="Eliminar categoría">🗑️</button>
+        </div>
+      </div>
     `);
   }
-  nav.innerHTML = items.join("");
+
+  rows.push(`<button id="add-category-btn" class="btn-add-category">+ Añadir categoría</button>`);
+
+  nav.innerHTML = rows.join("");
+
   nav.querySelectorAll(".cat-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.activeCategory = btn.dataset.cat;
       render();
     });
   });
+
+  nav.querySelectorAll(".cat-edit-btn").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const cat = getCategories().find((c) => c.id === btn.dataset.catId);
+      if (cat) openCategoryModal(cat);
+    });
+  });
+
+  nav.querySelectorAll(".cat-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const cat = getCategories().find((c) => c.id === btn.dataset.catId);
+      if (!cat) return;
+      const count = getCategoryEntries(cat.id).length;
+      const warn = count > 0 ? ` Se eliminarán también sus ${count} entrada(s).` : "";
+      if (confirm(`¿Eliminar la categoría "${cat.label}"?${warn}`)) {
+        deleteCategory(cat.id);
+        toast(`Categoría "${cat.label}" eliminada localmente. Pulsa "Guardar cambios" para subirlo a GitHub.`, "info");
+        render();
+      }
+    });
+  });
+
+  document.getElementById("add-category-btn").addEventListener("click", () => openCategoryModal(null));
+
+  enableRowDragReorder(nav, '.cat-row[data-cat-row-id]', "catRowId", (newOrder) => {
+    reorderCategories(newOrder);
+    render();
+  });
 }
 
-function renderCard(entry, q) {
+/* ---------- render: tarjetas de entradas ---------- */
+
+function renderCard(entry, q, reorderEnabled) {
   const guiBlock = entry.gui
     ? `<div class="block block-gui">
          <h4>🖱️ Modo gráfico</h4>
@@ -400,12 +562,17 @@ function renderCard(entry, q) {
     ? `<div class="tags">${entry.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>`
     : "";
 
+  const dragHandle = reorderEnabled
+    ? `<span class="drag-handle card-drag-handle" title="Arrastrar para reordenar">⠿</span>`
+    : "";
+
   return `
-    <article class="card" data-id="${entry.id}" data-category="${entry.category}">
+    <article class="card" data-id="${entry.id}" data-category="${entry.category}" draggable="${reorderEnabled}">
       <div class="card-header">
+        ${dragHandle}
         <button class="card-toggle">
           <div class="card-title-wrap">
-            <span class="card-cat-pill">${categoryLabel(entry.category)}${entry.subcategory ? " · " + escapeHtml(entry.subcategory) : ""}</span>
+            <span class="card-cat-pill">${escapeHtml(categoryIcon(entry.category))} ${categoryLabel(entry.category)}${entry.subcategory ? " · " + escapeHtml(entry.subcategory) : ""}</span>
             <h3 class="card-title">${highlight(entry.title, q)}</h3>
           </div>
           <span class="chevron">▾</span>
@@ -454,7 +621,13 @@ function render() {
   const q = normalize(state.query.trim());
   const container = document.getElementById("results");
   const resultCount = document.getElementById("result-count");
+  const reorderHint = document.getElementById("reorder-hint");
+  const reorderEnabled = state.activeCategory !== "all" && !q;
+
   resultCount.textContent = `${results.length} resultado${results.length === 1 ? "" : "s"}`;
+  reorderHint.textContent = reorderEnabled
+    ? "Arrastra ⠿ para cambiar el orden"
+    : "Selecciona una categoría concreta (sin buscar) para poder reordenar";
 
   if (results.length === 0) {
     container.innerHTML = `<div class="empty-state">
@@ -464,7 +637,7 @@ function render() {
     return;
   }
 
-  container.innerHTML = results.map((e) => renderCard(e, q)).join("");
+  container.innerHTML = results.map((e) => renderCard(e, q, reorderEnabled)).join("");
 
   container.querySelectorAll(".card-toggle").forEach((toggle) => {
     toggle.addEventListener("click", () => {
@@ -512,6 +685,13 @@ function render() {
     });
   });
 
+  if (reorderEnabled) {
+    enableRowDragReorder(container, '.card[draggable="true"]', "id", (newOrder) => {
+      reorderCategoryEntries(state.activeCategory, newOrder);
+      render();
+    });
+  }
+
   if (q) {
     container.querySelectorAll(".card").forEach((c) => c.classList.add("open"));
   }
@@ -521,10 +701,13 @@ function render() {
 
 function populateCategorySelect() {
   const select = document.getElementById("entry-category");
-  select.innerHTML = CATEGORIES.map((c) => `<option value="${c.id}">${c.label}</option>`).join("");
+  select.innerHTML = getCategories()
+    .map((c) => `<option value="${c.id}">${escapeHtml(c.icon || "📁")} ${escapeHtml(c.label)}</option>`)
+    .join("");
 }
 
 function openEntryModal(existingEntry) {
+  populateCategorySelect();
   const modal = document.getElementById("entry-modal");
   const title = document.getElementById("entry-modal-title");
   const idField = document.getElementById("entry-id");
@@ -551,10 +734,11 @@ function openEntryModal(existingEntry) {
     cliField.value = cliToText(existingEntry.cli);
     notesField.value = existingEntry.notes || "";
   } else {
+    const defaultCats = getCategories();
     title.textContent = "Nueva entrada";
     idField.value = "";
     originalCategoryField.value = "";
-    categoryField.value = state.activeCategory !== "all" ? state.activeCategory : CATEGORIES[0].id;
+    categoryField.value = state.activeCategory !== "all" ? state.activeCategory : (defaultCats[0]?.id || "");
     subcategoryField.value = "";
     titleField.value = "";
     descriptionField.value = "";
@@ -613,6 +797,55 @@ function handleEntryFormSubmit(ev) {
   render();
 }
 
+/* ---------- modal de categoría (añadir/editar) ---------- */
+
+function openCategoryModal(existingCategory) {
+  const modal = document.getElementById("category-modal");
+  const title = document.getElementById("category-modal-title");
+  const idField = document.getElementById("category-id");
+  const labelField = document.getElementById("category-label");
+  const iconField = document.getElementById("category-icon");
+
+  if (existingCategory) {
+    title.textContent = "Modificar categoría";
+    idField.value = existingCategory.id;
+    labelField.value = existingCategory.label;
+    iconField.value = existingCategory.icon || "";
+  } else {
+    title.textContent = "Nueva categoría";
+    idField.value = "";
+    labelField.value = "";
+    iconField.value = "";
+  }
+
+  modal.showModal();
+  labelField.focus();
+}
+
+function handleCategoryFormSubmit(ev) {
+  ev.preventDefault();
+  const idField = document.getElementById("category-id");
+  const label = document.getElementById("category-label").value.trim();
+  const icon = document.getElementById("category-icon").value.trim();
+
+  if (!label) {
+    toast("El nombre de la categoría es obligatorio.", "error");
+    return;
+  }
+
+  const isEdit = Boolean(idField.value);
+  if (isEdit) {
+    updateCategory(idField.value, { label, icon });
+    toast(`Categoría "${label}" actualizada localmente. Pulsa "Guardar cambios" para subirlo a GitHub.`, "success");
+  } else {
+    addCategory({ label, icon });
+    toast(`Categoría "${label}" añadida localmente. Pulsa "Guardar cambios" para subirlo a GitHub.`, "success");
+  }
+
+  document.getElementById("category-modal").close();
+  render();
+}
+
 /* ---------- ajustes / conexión con GitHub ---------- */
 
 function getGithubConfig() {
@@ -665,10 +898,28 @@ function updateGithubButtonLabel() {
 
 /* ---------- guardado en GitHub (API de contenidos) ---------- */
 
-async function pushCategoryToGitHub(catId, cfg) {
-  const { path, varName } = CATEGORY_FILE_MAP[catId];
-  const entries = getCategoryEntries(catId);
-  const content = `export const ${varName} = ${JSON.stringify(entries, null, 2)};\n`;
+function dirtyKeyLabel(key) {
+  if (key === CATEGORIES_DIRTY_KEY) return "Categorías (barra lateral)";
+  if (key === CUSTOM_DIRTY_KEY) return "Entradas de categorías personalizadas";
+  return categoryLabel(key);
+}
+
+function fileInfoForKey(key) {
+  if (key === CATEGORIES_DIRTY_KEY) return CATEGORIES_FILE;
+  if (key === CUSTOM_DIRTY_KEY) return CUSTOM_FILE;
+  return CATEGORY_FILE_MAP[key];
+}
+
+function contentForKey(key) {
+  if (key === CATEGORIES_DIRTY_KEY) return getCategories();
+  if (key === CUSTOM_DIRTY_KEY) return getCustomBucket();
+  return getCategoryEntries(key);
+}
+
+async function pushKeyToGitHub(key, cfg) {
+  const { path, varName } = fileInfoForKey(key);
+  const data = contentForKey(key);
+  const content = `export const ${varName} = ${JSON.stringify(data, null, 2)};\n`;
 
   const apiBase = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
   const headers = {
@@ -690,7 +941,7 @@ async function pushCategoryToGitHub(catId, cfg) {
     method: "PUT",
     headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: `Actualiza ${catId} desde el editor web`,
+      message: `Actualiza ${path} desde el editor web`,
       content: utf8ToBase64(content),
       sha,
       branch: cfg.branch
@@ -702,7 +953,7 @@ async function pushCategoryToGitHub(catId, cfg) {
     throw new Error(`Error al guardar ${path} (HTTP ${putResp.status}): ${errJson.message || "sin detalle"}`);
   }
 
-  clearDirty(catId);
+  clearDirty(key);
 }
 
 async function saveAllDirtyToGitHub() {
@@ -724,11 +975,11 @@ async function saveAllDirtyToGitHub() {
 
   const pending = [...dirtySet];
   const errors = [];
-  for (const catId of pending) {
+  for (const key of pending) {
     try {
-      await pushCategoryToGitHub(catId, cfg);
+      await pushKeyToGitHub(key, cfg);
     } catch (err) {
-      errors.push(`${categoryLabel(catId)}: ${err.message}`);
+      errors.push(`${dirtyKeyLabel(key)}: ${err.message}`);
     }
   }
 
@@ -746,7 +997,6 @@ async function saveAllDirtyToGitHub() {
 /* ---------- init ---------- */
 
 function init() {
-  populateCategorySelect();
   updateGithubButtonLabel();
 
   const searchInput = document.getElementById("search-input");
@@ -772,6 +1022,9 @@ function init() {
   document.getElementById("add-entry-btn").addEventListener("click", () => openEntryModal(null));
   document.getElementById("entry-form").addEventListener("submit", handleEntryFormSubmit);
   document.getElementById("entry-cancel").addEventListener("click", () => document.getElementById("entry-modal").close());
+
+  document.getElementById("category-form").addEventListener("submit", handleCategoryFormSubmit);
+  document.getElementById("category-cancel").addEventListener("click", () => document.getElementById("category-modal").close());
 
   document.getElementById("github-settings-btn").addEventListener("click", openGithubModal);
   document.getElementById("github-form").addEventListener("submit", handleGithubFormSubmit);
