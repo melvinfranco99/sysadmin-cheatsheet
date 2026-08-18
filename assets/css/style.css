@@ -151,21 +151,77 @@ a { color: var(--accent); }
 }
 
 .layout {
-  display: grid;
-  grid-template-columns: 250px 1fr;
-  gap: 0;
-  align-items: start;
+  display: flex;
+  align-items: stretch;
 }
 
+.sidebar-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+}
+
+.sidebar-wrap.resizing .sidebar { transition: none; }
+
 .sidebar {
+  width: var(--sidebar-width, 250px);
+  box-sizing: border-box;
   position: sticky;
   top: 65px;
-  align-self: start;
+  align-self: flex-start;
   height: calc(100vh - 65px);
   overflow-y: auto;
+  overflow-x: hidden;
   border-right: 1px solid var(--border);
   padding: 16px 10px;
+  transition: width 0.15s ease, padding 0.15s ease;
 }
+
+.layout.sidebar-collapsed .sidebar {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right: none;
+}
+
+.sidebar-resizer {
+  flex: 0 0 auto;
+  width: 6px;
+  margin-left: -3px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 3;
+}
+.sidebar-resizer:hover,
+.sidebar-wrap.resizing .sidebar-resizer {
+  background: var(--accent);
+}
+
+.layout.sidebar-collapsed .sidebar-resizer { display: none; }
+
+.sidebar-toggle {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  transform: translateX(50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  padding: 0;
+  line-height: 1;
+}
+.sidebar-toggle:hover { color: var(--accent-strong); border-color: var(--accent); }
+
+.layout.sidebar-collapsed .sidebar-toggle { transform: translateX(50%) rotate(180deg); }
 
 .cat-row {
   display: flex;
@@ -242,6 +298,7 @@ a { color: var(--accent); }
 }
 
 .main {
+  flex: 1 1 auto;
   padding: 20px 24px 60px;
   min-width: 0;
 }
@@ -627,13 +684,24 @@ footer.site-footer {
 .toast-error { border-color: #f85149; }
 
 @media (max-width: 860px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout { flex-direction: column; }
+  .sidebar-wrap { width: 100% !important; }
+  .sidebar-resizer { display: none; }
+  .sidebar-toggle { top: -2px; right: 10px; transform: none; }
+  .layout.sidebar-collapsed .sidebar-toggle { transform: rotate(90deg); }
   .sidebar {
+    width: 100% !important;
     position: static;
     height: auto;
     max-height: 40vh;
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+  .layout.sidebar-collapsed .sidebar {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom: none;
   }
   .cat-row .drag-handle,
   .cat-admin-actions { opacity: 1; }

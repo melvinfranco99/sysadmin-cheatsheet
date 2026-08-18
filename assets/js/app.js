@@ -47,6 +47,11 @@ const CUSTOM_DIRTY_KEY = "__custom__";
 const LS_PREFIX = "sysch:";
 const LS_GITHUB_CONFIG = LS_PREFIX + "github";
 const LS_CATEGORIES = LS_PREFIX + "categories";
+const LS_SIDEBAR_WIDTH = LS_PREFIX + "sidebarWidth";
+const LS_SIDEBAR_COLLAPSED = LS_PREFIX + "sidebarCollapsed";
+
+const SIDEBAR_MIN_WIDTH = 170;
+const SIDEBAR_MAX_WIDTH = 480;
 
 const state = {
   query: "",
@@ -994,10 +999,64 @@ async function saveAllDirtyToGitHub() {
   render();
 }
 
+/* ---------- barra lateral: colapsar y redimensionar ---------- */
+
+function initSidebarControls() {
+  const layout = document.getElementById("layout");
+  const sidebarWrap = document.getElementById("sidebar-wrap");
+  const resizer = document.getElementById("sidebar-resizer");
+  const toggleBtn = document.getElementById("sidebar-toggle");
+
+  const savedWidth = parseInt(localStorage.getItem(LS_SIDEBAR_WIDTH), 10);
+  if (!Number.isNaN(savedWidth)) {
+    const clamped = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, savedWidth));
+    document.documentElement.style.setProperty("--sidebar-width", clamped + "px");
+  }
+
+  const collapsed = localStorage.getItem(LS_SIDEBAR_COLLAPSED) === "1";
+  layout.classList.toggle("sidebar-collapsed", collapsed);
+  toggleBtn.title = collapsed ? "Mostrar barra lateral" : "Ocultar barra lateral";
+
+  toggleBtn.addEventListener("click", () => {
+    const nowCollapsed = layout.classList.toggle("sidebar-collapsed");
+    localStorage.setItem(LS_SIDEBAR_COLLAPSED, nowCollapsed ? "1" : "0");
+    toggleBtn.title = nowCollapsed ? "Mostrar barra lateral" : "Ocultar barra lateral";
+  });
+
+  let resizing = false;
+
+  resizer.addEventListener("mousedown", (ev) => {
+    if (layout.classList.contains("sidebar-collapsed")) return;
+    ev.preventDefault();
+    resizing = true;
+    sidebarWrap.classList.add("resizing");
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  });
+
+  window.addEventListener("mousemove", (ev) => {
+    if (!resizing) return;
+    const wrapRect = sidebarWrap.getBoundingClientRect();
+    const newWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, ev.clientX - wrapRect.left));
+    document.documentElement.style.setProperty("--sidebar-width", newWidth + "px");
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!resizing) return;
+    resizing = false;
+    sidebarWrap.classList.remove("resizing");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    const width = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width").trim();
+    if (width) localStorage.setItem(LS_SIDEBAR_WIDTH, parseInt(width, 10));
+  });
+}
+
 /* ---------- init ---------- */
 
 function init() {
   updateGithubButtonLabel();
+  initSidebarControls();
 
   const searchInput = document.getElementById("search-input");
   searchInput.addEventListener("input", (e) => {
